@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "steam-game-recommendation"
+version = "0.1.0"
+description = "A toy project that builds a recommendation system for steam games"
+authors = ["Hy <107110503+whanyu1212@users.noreply.github.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+pandas = "^2.1.4"
+isort = "^5.13.2"
+flake8 = "^7.0.0"
+pre-commit = "^3.6.0"
+google-cloud-bigquery = "^3.15.0"
+pytest = "^7.4.4"
+docformatter = "^1.7.5"
+pandera = "^0.18.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 79
