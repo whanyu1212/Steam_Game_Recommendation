@@ -1,0 +1,4 @@
+raw_filepath: ./data/games.csv
+gcp_auth_path: ./cfg/hy-learning-93fbebd91d63.json
+dataset_id: default_dataset
+table_id: test_table
