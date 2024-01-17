@@ -145,26 +145,43 @@ def _upload_csv_BQ(
         csv_file_path (str): path where the raw csv is stored
     """
     client = create_bigquery_client(credential_path)
+    logger.info("BigQuery client initialized.")
     table_ref = client.dataset(dataset_id).table(table_id)
     job_config = create_job_config()
 
     # the file is opened in binary mode
-    with open(csv_file_path, "rb") as source_file:
-        job = load_table_from_file(client, source_file, table_ref, job_config)
-        if job is not None:
-            handle_job_result(job, csv_file_path)
-        else:
-            logger.error(
-                f"Error: Export to Bigquery table failed for {csv_file_path}"
+    try:
+        with open(csv_file_path, "rb") as source_file:
+            logger.info(f"Successfully opened file {csv_file_path}.")
+            job = load_table_from_file(
+                client, source_file, table_ref, job_config
             )
+            if job is not None:
+                handle_job_result(job, csv_file_path)
+            else:
+                logger.error(
+                    "Error: Export"
+                    f"to Bigquery table failed for {csv_file_path}"
+                )
+    except (IOError, FileNotFoundError) as e:
+        logger.error(f"Failed to open file {csv_file_path}: {str(e)}")
 
 
 if __name__ == "__main__":
     logger.info("Starting the export to Bigquery")
     start = time.time()
-    with open("./cfg/config.yaml", "r") as f:
-        config = yaml.safe_load(f)
+    try:
+        with open("./cfg/config.yaml", "r") as f:
+            config = yaml.safe_load(f)
+            logger.info("Config file loaded successfully")
+    except Exception as e:
+        logger.exception(
+            f"Error: Unable to load config file with error {str(e)}"
+        )
+        exit(1)
+
     validate_config(config)
+    logger.info("Config validated.")
 
     credential_path = config["gcp_auth_path"]
     dataset_id = config["dataset_id"]
