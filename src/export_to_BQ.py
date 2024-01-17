@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import IO, Dict, Union
 
 import yaml
 from google.cloud import bigquery
@@ -9,10 +9,22 @@ JOB_STATE_DONE = "DONE"
 JOB_STATE_PENDING = "PENDING"
 JOB_STATE_RUNNING = "RUNNING"
 
-logger.add("./logs/logs_for_testing.log")
+logger.add("./logs/log_for_testing.log")
 
 
-def validate_config(config: Dict):
+def validate_config(config: Dict) -> None:
+    """
+    Check if the necessary config keys are present and have the correct
+    type.
+
+    Args:
+        config (Dict): Config in dict format
+
+    Raises:
+        ValueError: If the key is not found
+        TypeError: If the values are not of type str
+        ValueError: if the values are empty
+    """
     required_keys = ["gcp_auth_path", "dataset_id", "table_id", "raw_filepath"]
 
     for key in required_keys:
@@ -30,11 +42,26 @@ def validate_config(config: Dict):
             raise ValueError(f"Config key {key} must not be empty")
 
 
-def create_bigquery_client(credential_path: str):
+def create_bigquery_client(credential_path: str) -> bigquery.Client:
+    """
+    Initialize the bigquery client.
+
+    Args:
+        credential_path (str): Path to the GCP service account key
+
+    Returns:
+        bigquery.Client: as the name suggests
+    """
     return bigquery.Client.from_service_account_json(credential_path)
 
 
-def create_job_config():
+def create_job_config() -> bigquery.LoadJobConfig:
+    """
+    Iniatialize the job config for for uploading CSV.
+
+    Returns:
+        bigquery.LoadJobConfig: Config defining the job
+    """
     job_config = bigquery.LoadJobConfig()
     job_config.source_format = bigquery.SourceFormat.CSV
     job_config.skip_leading_rows = 1
@@ -43,7 +70,12 @@ def create_job_config():
     return job_config
 
 
-def load_table_from_file(client, source_file, table_ref, job_config):
+def load_table_from_file(
+    client: bigquery.Client,
+    source_file: IO[bytes],
+    table_ref: bigquery.TableReference,
+    job_config: bigquery.LoadJobConfig,
+) -> Union[bigquery.LoadJob, None]:
     try:
         job = client.load_table_from_file(
             source_file, table_ref, job_config=job_config
@@ -51,14 +83,20 @@ def load_table_from_file(client, source_file, table_ref, job_config):
         job.result()
         return job
     except Exception as e:
-        # Log the full exception with stack trace
         logger.exception(
             f"Error: CSV export to Bigquery table failed with error {str(e)}"
         )
         return None
 
 
-def handle_job_result(job, csv_file_path):
+def handle_job_result(job: bigquery.LoadJob, csv_file_path: str) -> None:
+    """
+    Check the job state and log the result.
+
+    Args:
+        job (bigquery.LoadJob): Whether it is still running
+        csv_file_path (str): path where the raw csv is stored
+    """
     if job.state == JOB_STATE_DONE:
         logger.success(
             f"CSV file '{csv_file_path}' successfully"
@@ -75,15 +113,29 @@ def handle_job_result(job, csv_file_path):
 
 def _upload_csv_BQ(
     credential_path: str, dataset_id: str, table_id: str, csv_file_path: str
-):
+) -> None:
+    """
+    Trigger the upload of the CSV to Bigquery.
+
+    Args:
+        credential_path (str): GCP_auth_file_path
+        dataset_id (str): dataset created on BQ
+        table_id (str): name given to the new table
+        csv_file_path (str): path where the raw csv is stored
+    """
     client = create_bigquery_client(credential_path)
     table_ref = client.dataset(dataset_id).table(table_id)
     job_config = create_job_config()
 
+    # the file is opened in binary mode
     with open(csv_file_path, "rb") as source_file:
         job = load_table_from_file(client, source_file, table_ref, job_config)
         if job is not None:
             handle_job_result(job, csv_file_path)
+        else:
+            logger.error(
+                f"Error: Export to Bigquery table failed for {csv_file_path}"
+            )
 
 
 if __name__ == "__main__":
