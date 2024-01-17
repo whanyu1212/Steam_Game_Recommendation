@@ -1,6 +1,8 @@
+import time
 from typing import IO, Dict, Union
 
 import yaml
+from colorama import Fore, Style
 from google.cloud import bigquery
 from loguru import logger
 
@@ -10,6 +12,24 @@ JOB_STATE_PENDING = "PENDING"
 JOB_STATE_RUNNING = "RUNNING"
 
 logger.add("./logs/log_for_testing.log")
+
+
+def map_time_unit(time_taken: float) -> str:
+    """
+    Map the time unit to the appropriate string.
+
+    Args:
+        time_taken (float): Time taken in seconds
+
+    Returns:
+        str: Time unit
+    """
+    if time_taken < 60:
+        return "seconds"
+    elif time_taken < 3600:
+        return "minutes"
+    else:
+        return "hours"
 
 
 def validate_config(config: Dict) -> None:
@@ -97,10 +117,11 @@ def handle_job_result(job: bigquery.LoadJob, csv_file_path: str) -> None:
         job (bigquery.LoadJob): Whether it is still running
         csv_file_path (str): path where the raw csv is stored
     """
+
     if job.state == JOB_STATE_DONE:
         logger.success(
-            f"CSV file '{csv_file_path}' successfully"
-            "exported to Bigquery table, job ID: {job.job_id}"
+            f"CSV file '{csv_file_path}' successfully "
+            f"exported to Bigquery table, job ID: {job.job_id}"
         )
     elif job.state in [JOB_STATE_PENDING, JOB_STATE_RUNNING]:
         logger.info(
@@ -139,6 +160,8 @@ def _upload_csv_BQ(
 
 
 if __name__ == "__main__":
+    logger.info("Starting the export to Bigquery")
+    start = time.time()
     with open("./cfg/config.yaml", "r") as f:
         config = yaml.safe_load(f)
     validate_config(config)
@@ -149,3 +172,10 @@ if __name__ == "__main__":
     csv_file_path = config["raw_filepath"]
 
     _upload_csv_BQ(credential_path, dataset_id, table_id, csv_file_path)
+    end = time.time()
+    time_taken = end - start
+    time_unit = map_time_unit(time_taken)
+    logger.info(
+        f"Process finished. Time taken: {Fore.GREEN}{time_taken} "
+        f"{time_unit}{Style.RESET_ALL}. Exiting..."
+    )
