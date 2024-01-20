@@ -6,12 +6,12 @@ from colorama import Fore, Style
 from google.cloud import bigquery
 from loguru import logger
 
+from src.utils.setup_logger import log_error, log_info, log_success
+
 # Constants
 JOB_STATE_DONE = "DONE"
 JOB_STATE_PENDING = "PENDING"
 JOB_STATE_RUNNING = "RUNNING"
-
-logger.add("./logs/log_for_testing.log")
 
 
 def map_time_unit(time_taken: float) -> str:
@@ -30,6 +30,18 @@ def map_time_unit(time_taken: float) -> str:
         return "minutes"
     else:
         return "hours"
+
+
+def load_config(config_path: str) -> Dict:
+    """Load the configuration file."""
+    try:
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
+            log_info(f"Successfully loaded config from {config_path}")
+            return config
+    except Exception as e:
+        log_error(f"Failed to load config from {config_path}: {str(e)}")
+        exit(1)
 
 
 def validate_config(config: Dict) -> None:
@@ -119,17 +131,17 @@ def handle_job_result(job: bigquery.LoadJob, csv_file_path: str) -> None:
     """
 
     if job.state == JOB_STATE_DONE:
-        logger.success(
+        log_success(
             f"CSV file '{csv_file_path}' successfully "
             f"exported to Bigquery table, job ID: {job.job_id}"
         )
     elif job.state in [JOB_STATE_PENDING, JOB_STATE_RUNNING]:
-        logger.info(
+        log_info(
             f"Job {job.job_id} is still in progress,"
             f"current state: {job.state}"
         )
     else:
-        logger.error(f"Job {job.job_id} ended with state: {job.state}")
+        log_error(f"Job {job.job_id} ended with state: {job.state}")
 
 
 def _upload_csv_BQ(
@@ -145,43 +157,35 @@ def _upload_csv_BQ(
         csv_file_path (str): path where the raw csv is stored
     """
     client = create_bigquery_client(credential_path)
-    logger.info("BigQuery client initialized.")
+    log_info("BigQuery client initialized.")
     table_ref = client.dataset(dataset_id).table(table_id)
     job_config = create_job_config()
 
     # the file is opened in binary mode
     try:
         with open(csv_file_path, "rb") as source_file:
-            logger.info(f"Successfully opened file {csv_file_path}.")
+            log_info(f"Successfully opened file {csv_file_path}.")
             job = load_table_from_file(
                 client, source_file, table_ref, job_config
             )
             if job is not None:
                 handle_job_result(job, csv_file_path)
             else:
-                logger.error(
+                log_error(
                     "Error: Export"
                     f"to Bigquery table failed for {csv_file_path}"
                 )
     except (IOError, FileNotFoundError) as e:
-        logger.error(f"Failed to open file {csv_file_path}: {str(e)}")
+        log_error(f"Failed to open file {csv_file_path}: {str(e)}")
 
 
 if __name__ == "__main__":
-    logger.info("Starting the export to Bigquery")
+    log_info("Starting the export to Bigquery")
     start = time.time()
-    try:
-        with open("./cfg/config.yaml", "r") as f:
-            config = yaml.safe_load(f)
-            logger.info("Config file loaded successfully")
-    except Exception as e:
-        logger.exception(
-            f"Error: Unable to load config file with error {str(e)}"
-        )
-        exit(1)
+    config = load_config("./cfg/config.yaml")
 
     validate_config(config)
-    logger.info("Config validated.")
+    log_info("Config validated.")
 
     credential_path = config["gcp_auth_path"]
     dataset_id = config["dataset_id"]
@@ -192,7 +196,7 @@ if __name__ == "__main__":
     end = time.time()
     time_taken = end - start
     time_unit = map_time_unit(time_taken)
-    logger.info(
+    log_info(
         f"Process finished. Time taken: {Fore.GREEN}{time_taken} "
         f"{time_unit}{Style.RESET_ALL}. Exiting..."
     )
